@@ -36,7 +36,11 @@ module.exports = {
     },
 
     equal: function (string) {
-        this.expression[this.field] = {$eq: string};
+        if (!this.reverse) {
+            this.expression[this.field] = {$eq: string};
+        } else {
+            this.expression[this.field] = {$not: {$eq: string}};
+        }
         return this;
     },
 
@@ -46,7 +50,11 @@ module.exports = {
     },
 
     include: function (array) {
-        this.expression[this.field] = {$in: array};
+        if (!this.reverse) {
+            this.expression[this.field] = {$in: array};
+        } else {
+            this.expression[this.field] = {$not: {$in: array}};
+        }
         return this;
     },
 

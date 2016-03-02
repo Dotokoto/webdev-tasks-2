@@ -27,6 +27,19 @@ multivarka
     });
 
 multivarka
+    .server('mongodb://localhost/test')
+    .collection('students')
+    .where('group').not().include(['ПИ-401'])
+    .find(function (err, data) {
+        if (!err) {
+            console.log(data);
+        } else {
+            console.log(err);
+        }
+    });
+
+
+multivarka
     .where('mark').greatThan(1)
 .find(function (err, data) {
         if (!err) {
