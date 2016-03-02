@@ -1,6 +1,7 @@
 'use strict';
 var MongoClient = require('mongodb').MongoClient;
 
+
 module.exports = {
     server: function (url) {
         this.url = url;
@@ -59,12 +60,7 @@ module.exports = {
     },
 
     find: function (callback) {
-        if (!this.url) {
-            callback('no server');
-            return;
-        }
-        if (!this.col) {
-            callback('no collection');
+        if (!this.__checkParams(callback)) {
             return;
         }
         if (!this.expression) {
@@ -77,12 +73,52 @@ module.exports = {
                 console.log(err);
                 return;
             }
-            console.log(expression);
             var col = db.collection(collection);
             col.find(expression).toArray(function (err, res) {
                 callback(err, res);
                 db.close();
             });
         });
+    },
+
+    insert: function (obj, callback) {
+        if (!this.__checkParams(callback)) {
+            return;
+        }
+        if (!obj) {
+            callback('no object');
+            return;
+        }
+        var collection = this.col;
+        MongoClient.connect(this.url, function (err, db) {
+            if (err) {
+                console.log(err);
+                return;
+            }
+            var col = db.collection(collection);
+            try {
+                col.insertOne(obj);
+                db.close();
+            } catch (Error) {
+                console.log(Error);
+                callback(Error);
+                db.close();
+            }
+
+        });
+    },
+
+
+
+    __checkParams: function (callback) {
+        if (!this.url) {
+            callback('no server');
+            return false;
+        }
+        if (!this.col) {
+            callback('no collection');
+            return false;
+        }
+        return true;
     }
 };
