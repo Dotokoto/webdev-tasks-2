@@ -1,6 +1,7 @@
 {
   "private": true,
   "dependencies": {
+    "bluebird": "^3.3.4",
     "jscs": "2.2.1",
     "mongodb": "^2.1.7"
   },

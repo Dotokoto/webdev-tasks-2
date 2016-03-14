@@ -1,6 +1,9 @@
 'use strict';
-var MongoClient = require('mongodb').MongoClient;
-
+const MongoClient = require('mongodb').MongoClient;
+const Collection = require('mongodb').Collection;
+const Promise = require('bluebird');
+Promise.promisifyAll(MongoClient);
+Promise.promisifyAll(Collection.prototype);
 
 module.exports = {
     server: function (url) {
@@ -15,100 +18,94 @@ module.exports = {
 
     where: function (field) {
         this.field = field;
-        this.expression = {};
-        this.reverse = false;
+        this.__expression = {};
+        this.__reverse = false;
+        this.__setExpression = {};
         return this;
     },
 
     greatThan: function (number) {
-        if (!this.reverse) {
-            this.expression[this.field] = {$gt: number};
-        } else {
-            this.expression[this.field] = {$lt: number};
-        }
+        this.__expression[this.field] = !this.__reverse ? {$gt: number} : {$lt: number};
         return this;
     },
 
     lessThan: function (number) {
-        this.not();
-        this.greatThan(number);
-        this.not();
+        this.__expression[this.field] = !this.__reverse ? {$lt: number} : {$gt: number};
         return this;
     },
 
     equal: function (string) {
-        if (!this.reverse) {
-            this.expression[this.field] = {$eq: string};
-        } else {
-            this.expression[this.field] = {$not: {$eq: string}};
-        }
+        this.__expression[this.field] = !this.__reverse ? {$eq: string} : {$not: {$eq: string}};
         return this;
     },
 
     not: function () {
-        this.reverse = !this.reverse;
+        this.__reverse = !this.__reverse;
         return this;
     },
 
     include: function (array) {
-        if (!this.reverse) {
-            this.expression[this.field] = {$in: array};
-        } else {
-            this.expression[this.field] = {$not: {$in: array}};
-        }
+        this.__expression[this.field] = !this.__reverse ? {$in: array} : {$not: {$in: array}};
         return this;
     },
 
     find: function (callback) {
         if (!this.__checkParams(callback)) {
-            return;
+            return this;
         }
-        if (!this.expression) {
-            this.expression = {};
+        if (!this.__expression) {
+            this.__expression = {};
         }
-        var collection = this.col;
-        var expression = this.expression;
-        MongoClient.connect(this.url, function (err, db) {
-            if (err) {
-                console.log(err);
-                return;
-            }
-            var col = db.collection(collection);
-            col.find(expression).toArray(function (err, res) {
-                callback(err, res);
-                db.close();
-            });
-        });
+        this.__mongoRequest('find', {
+            url: this.url,
+            col: this.col,
+            expression: this.__expression
+        }, callback);
+        return this;
     },
 
     insert: function (obj, callback) {
         if (!this.__checkParams(callback)) {
-            return;
+            return this;
         }
         if (!obj) {
             callback('no object');
-            return;
+            return this;
         }
-        var collection = this.col;
-        MongoClient.connect(this.url, function (err, db) {
-            if (err) {
-                console.log(err);
-                return;
-            }
-            var col = db.collection(collection);
-            try {
-                col.insertOne(obj);
-                db.close();
-            } catch (Error) {
-                console.log(Error);
-                callback(Error);
-                db.close();
-            }
-
-        });
+        this.__mongoRequest('insert', {
+            url: this.url,
+            col: this.col,
+            expression: this.__expression,
+            object: obj
+        }, callback);
+        return this;
     },
 
+    remove: function (callback) {
+        this.__mongoRequest('remove', {
+            url: this.url,
+            col: this.col,
+            expression: this.__expression
+        }, callback);
+        return this;
+    },
 
+    set: function (field, value) {
+        this.__setExpression['$set'] = {};
+        this.__setExpression['$set'][field] = value;
+        return this;
+    },
+
+    update: function (callback) {
+        this.__mongoRequest('update', {
+                url: this.url,
+                col: this.col,
+                expression: this.__expression,
+                setExpression: this.__setExpression
+            },
+            callback);
+        return this;
+    },
 
     __checkParams: function (callback) {
         if (!this.url) {
@@ -120,5 +117,42 @@ module.exports = {
             return false;
         }
         return true;
+    },
+
+    __mongoRequest: function (type, params, callback) {
+        if (!this.__checkParams(callback)) {
+            return this;
+        }
+        var database;
+        MongoClient.connectAsync(params.url)
+            .then(function (db) {
+                database = db;
+                var col = db.collection(params.col);
+                switch (type) {
+                    case 'find':
+                        return col.find(params.expression).toArray();
+                        break;
+                    case 'insert':
+                        return col.insertOne(params.object);
+                        break;
+                    case 'remove':
+                        return col.deleteMany({});
+                        break;
+                    case 'update':
+                        return col.updateMany(params.expression, params.setExpression);
+                        break;
+                }
+            })
+            .then(function (data) {
+                database.close();
+                callback(null, data);
+            })
+            .catch(function (error) {
+                console.log(error);
+                database.close();
+                callback(error);
+            });
+        return this;
     }
 };
+
